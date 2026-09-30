@@ -98,12 +98,13 @@ class MyScheduler(Scheduler):
             (o for o in obs.ready if est(o) <= o.time_left), 
             # estimated work time against customers patience
             # takes only those where the work time is less than the patience
-            key=est,
+            key=lambda o: est(o) / (1 + 0.25 * (o.priority - 1)),
         )
 
         decision = Decision()
         fill_idle(decision, obs, rail) #gives tasks to idle cooks
 
+        
         return decision.annotate(
             text=f"{len(obs.ready)} on the rail, shortest first",
             queue=[o.id for o in rail],
