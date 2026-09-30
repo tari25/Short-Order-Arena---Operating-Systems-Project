@@ -83,86 +83,28 @@ This file is the whole submission: when you are done, upload it to Moodle.
 from kitchen import Decision, Scheduler, fill_idle
 
 
-class IdiotSandwich(Scheduler):
-    # What this scheduler calls itself in your own results and replays. The
-    # leaderboard uses the identity Moodle has for you.
-    name = "idiot_sandwich"
+class MyScheduler(Scheduler):
+    name = "better_sandwhich"
     version = "1"
 
     def reset(self, seed):
-        """Called once before each run. Set up any per-run state here."""
+        pass
 
     def schedule(self, obs):
-        """Called at every scheduling point. Decide who cooks what.
-
-        This version puts the longest job on every free cook, then preempts
-        for anything longer still. It is wrong in an instructive way: nothing
-        about it is broken, every assignment it makes is legal, and it still
-        loses most of the room. It scores about 44 where first-come-first-
-        served scores 58 and the strongest reference scores 68, so there is a
-        lot of ground in front of you and the first few metres are easy.
-
-        Things to work out, roughly in order of payoff:
-
-          1. Watch a replay and find the espresso that waited ninety ticks
-             behind a banquet. What should the rail have been sorted by?
-          2. Some orders cannot be finished before `time_left` runs out no
-             matter who cooks them. What does starting one of those cost you?
-          3. When should a cook be taken *off* an order? Preempting is
-             allowed, but each one costs `obs.kitchen.switch_cost` twice -
-             once now and once to resume - so find out when it pays.
-          4. Priority-3 customers have the least patience. Is first-past-the-
-             post on priority better or worse than what you have?
-          5. `wake_in` is your timer interrupt. What decision would you like
-             to revisit when nothing has happened but somebody is about to
-             run out of time?
-          6. Watch the stations. When the one an order needs is full, start
-             something that goes somewhere else instead of leaving a cook
-             standing - and keep the busiest station fed, because everything
-             else runs at the rate that one clears.
-        """
-        # Longest job first. `estimate_remaining` is the truth when durations
-        # are shown and a guess when they are hidden, so this works on the
-        # blind profile too - it is just as bad there.
         est = obs.estimate_remaining
-        rail = sorted(obs.ready, key=est, reverse=True)
+
+        #sjf
+        rail = sorted(
+            (o for o in obs.ready if est(o) <= o.time_left), 
+            # estimated work time against customers patience
+            # takes only those where the work time is less than the patience
+            key=est,
+        )
 
         decision = Decision()
-        # `fill_idle` hands out the free cooks and gives back what is left,
-        # counting station places as it goes.
-        rest = fill_idle(decision, obs, rail)
-
-        # And now the bad part: take a cook off their dish for anything bigger.
-        #
-        # `fill_idle` already spent some station places above, and
-        # `obs.free_stations()` still reports what was free before it ran, so
-        # the places it used have to come off the count before this loop can
-        # trust it. Skip this and the engine refuses the assignments.
-        free = obs.free_stations()
-        for order_id in decision.assignments.values():
-            if order_id is None:
-                continue
-            assigned = obs.order(order_id)
-            if assigned is not None and assigned.station is not None:
-                free[assigned.station] = free.get(assigned.station, 0) - 1
-        for core in obs.working_cores:
-            current = obs.order_on(core)
-            if current is None or not rest:
-                continue
-            candidate = obs.order(rest[0])
-            if candidate is None:
-                continue
-            # Only a place that is genuinely free counts. The place the
-            # preempted order was holding does not come back inside the same
-            # decision, so counting on it gets the assignment refused.
-            station = candidate.station
-            room = station is None or free.get(station, 0) > 0
-            if room and est(candidate) > est(current):
-                decision.assign(core, rest.pop(0))
-                if station is not None:
-                    free[station] = free.get(station, 0) - 1
+        fill_idle(decision, obs, rail) #gives tasks to idle cooks
 
         return decision.annotate(
-            text=f"{len(obs.ready)} on the rail, biggest first",
+            text=f"{len(obs.ready)} on the rail, shortest first",
             queue=[o.id for o in rail],
         )
